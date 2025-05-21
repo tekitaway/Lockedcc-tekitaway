@@ -707,143 +707,142 @@ AimlockSection:AddSlider('MySlider', {
     end
 })
 
-local AimlockSection = Tabs.Aimlock:AddRightGroupbox('Aimlocks (Buttons)')
+AimlockSection = Tabs.Aimlock:AddLeftGroupbox('Camlock')
 
-AimlockSection:AddButton('Semi Legit Camlock (c)', function()
-               getgenv().RecurringPoint = "UpperTorso"
-getgenv().Hitbox = "UpperTorso"
-getgenv().Keybind = "c"
-getgenv().AimbotStrengthAmount = 0.3823
-getgenv().PredictionAmount = 6.75
-getgenv().Radius = 36
-getgenv().UsePrediction = true
-getgenv().AimbotStrength = true
-getgenv().FirstPerson = true
-getgenv().ThirdPerson = true
-getgenv().TeamCheck = false
-getgenv().Enabled = true
-    end)
-
-AimlockSection:AddButton('Camlock (c)', function()
-                -- === EDITABLE SETTINGS ===
-getgenv().Aimbot = {
-    Status = true,
-    Keybind = 'C',
-    Hitpart = 'UpperTorso',
-    Smoothness = 0.15, -- Lower = snappier, Higher = smoother (0.01 to 1 recommended)
-    Prediction = {
-        X = 0.165,     -- Increase if targets move fast, decrease if too much lead
-        Y = 0.1,
-    },
-}
--- =========================
-
-if getgenv().AimbotRan then
-    -- Allow re-execution to update settings
-    if getgenv().AimbotDisconnects then
-        for _, conn in ipairs(getgenv().AimbotDisconnects) do
-            pcall(function() conn:Disconnect() end)
-        end
-    end
-else
-    getgenv().AimbotRan = true
-end
-getgenv().AimbotDisconnects = {}
-
-local RunService = game:GetService('RunService')
-local Workspace = game:GetService('Workspace')
-local Players = game:GetService('Players')
-local LocalPlayer = Players.LocalPlayer
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local UserInputService = game:GetService("UserInputService")
+local Workspace = game:GetService("Workspace")
+local lp = Players.LocalPlayer
+local mouse = lp:GetMouse()
 local Camera = Workspace.CurrentCamera
-local Mouse = LocalPlayer:GetMouse()
 
-local Player = nil
+local EnumKeyCode = Enum.KeyCode
+local EnumUserInputType = Enum.UserInputType
 
-local function GetClosestPlayer()
-    local ClosestDistance, ClosestPlayer = 100000, nil
-    for _, PlayerObj in pairs(Players:GetPlayers()) do
-        if PlayerObj.Name ~= LocalPlayer.Name and PlayerObj.Character and PlayerObj.Character:FindFirstChild('HumanoidRootPart') then
-            local Root, Visible = Camera:WorldToScreenPoint(PlayerObj.Character.HumanoidRootPart.Position)
-            if not Visible then continue end
-            Root = (Vector2.new(Mouse.X, Mouse.Y) - Vector2.new(Root.X, Root.Y)).Magnitude
-            if Root < ClosestDistance then
-                ClosestPlayer = PlayerObj
-                ClosestDistance = Root
+local Script = {
+    Table = {
+        CamLock = {
+            Keybind = "C",
+            Smoothness = 0.15,
+            Prediction = 0.165,
+            Status = false,
+            HotkeyEnabled = false,
+            Hitpart = "UpperTorso"
+        }
+    },
+    Target = nil,
+    Connections = {}
+}
+
+-- Get the closest player to the mouse
+local function getClosestPlayer()
+    local closestDistance, closestPlayer = math.huge, nil
+    for _, player in ipairs(Players:GetPlayers()) do
+        if player ~= lp and player.Character and player.Character:FindFirstChild("HumanoidRootPart") then
+            local root = player.Character.HumanoidRootPart
+            local screenPos, visible = Camera:WorldToScreenPoint(root.Position)
+            if visible then
+                local mousePos = Vector2.new(mouse.X, mouse.Y)
+                local distance = (Vector2.new(screenPos.X, screenPos.Y) - mousePos).Magnitude
+                if distance < closestDistance then
+                    closestDistance = distance
+                    closestPlayer = player
+                end
             end
         end
     end
-    return ClosestPlayer
+    return closestPlayer
 end
 
-table.insert(getgenv().AimbotDisconnects, Mouse.KeyDown:Connect(function(key)
-    if key == Aimbot.Keybind:lower() then
-        Player = not Player and GetClosestPlayer() or nil
-    end
-end))
-
-table.insert(getgenv().AimbotDisconnects, RunService.RenderStepped:Connect(function()
-    if not Player or not Aimbot.Status then return end
-    local Hitpart = Player.Character and Player.Character:FindFirstChild(Aimbot.Hitpart)
-    if not Hitpart then return end
-
-    local predictedPos = Hitpart.Position + Hitpart.Velocity * Vector3.new(Aimbot.Prediction.X, Aimbot.Prediction.Y, Aimbot.Prediction.X)
-    local current = Camera.CFrame.Position
-    local smoothness = math.clamp(Aimbot.Smoothness, 0.01, 1)
-    local newLook = current:Lerp(predictedPos, smoothness)
-    Camera.CFrame = CFrame.new(current, newLook)
-end))
-    end)
-
-AimlockSection:AddButton('Streamable HitboxExpander', function()
-                -- Streamable Hitbox Expander for Da Hood & Copies
-
-local Players = game:GetService("Players")
-local LocalPlayer = Players.LocalPlayer
-
--- === CONFIGURATION ===
-local SIZE = Vector3.new(7, 7, 7) -- Default HRP is about 2,2,1; this is much larger
-local TRANSPARENCY = 0.9 -- Nearly invisible (1 = fully invisible, 0 = fully visible)
-local COLOR = Color3.fromRGB(255, 0, 0) -- Only you see this, for debugging
--- =====================
-
-local function expandHitbox(char)
-    local hrp = char:FindFirstChild("HumanoidRootPart")
-    if hrp and hrp.ClassName == "Part" then
-        hrp.Size = SIZE
-        hrp.Transparency = TRANSPARENCY
-        hrp.Color = COLOR
-        hrp.Material = Enum.Material.ForceField
-        hrp.CanCollide = false
+-- Keybind handler to toggle camlock
+Script.Functions = {}
+Script.Functions.onKeyPress = function(input, gameProcessed)
+    if gameProcessed then return end
+    if Script.Table.CamLock.HotkeyEnabled and input.UserInputType == EnumUserInputType.Keyboard and input.KeyCode == EnumKeyCode[Script.Table.CamLock.Keybind] then
+        Script.Table.CamLock.Status = not Script.Table.CamLock.Status
+        if Script.Table.CamLock.Status then
+            Script.Target = getClosestPlayer()
+        else
+            Script.Target = nil
+        end
     end
 end
 
--- Initial application to all players
-for _, player in ipairs(Players:GetPlayers()) do
-    if player ~= LocalPlayer and player.Character then
-        expandHitbox(player.Character)
-    end
-end
+UserInputService.InputBegan:Connect(Script.Functions.onKeyPress)
 
--- Apply to new players and respawns
-Players.PlayerAdded:Connect(function(player)
-    player.CharacterAdded:Connect(function(char)
-        task.wait(0.5)
-        expandHitbox(char)
-    end)
+-- Camlock logic (rotation only, no zoom)
+if Script.Connections.CamLock then
+    Script.Connections.CamLock:Disconnect()
+end
+Script.Connections.CamLock = RunService.RenderStepped:Connect(function()
+    if Script.Table.CamLock.Status and Script.Target and Script.Target.Character and Script.Target.Character:FindFirstChild(Script.Table.CamLock.Hitpart) then
+        local hitpart = Script.Target.Character[Script.Table.CamLock.Hitpart]
+        local predictedPos = hitpart.Position + (hitpart.Velocity * Script.Table.CamLock.Prediction)
+        local camPos = Camera.CFrame.Position
+        local direction = (predictedPos - camPos).Unit
+        local currentLook = Camera.CFrame.LookVector
+        local smoothness = math.clamp(Script.Table.CamLock.Smoothness, 0.01, 1)
+        local lerpedLook = currentLook:Lerp(direction, smoothness)
+        Camera.CFrame = CFrame.new(camPos, camPos + lerpedLook)
+    end
 end)
 
-for _, player in ipairs(Players:GetPlayers()) do
-    if player ~= LocalPlayer then
-        player.CharacterAdded:Connect(function(char)
-            task.wait(0.5)
-            expandHitbox(char)
-        end)
+-- UI Integration
+AimlockSection:AddToggle('CamlockEnableHotkey', {
+    Text = 'Enable Hotkey',
+    Default = false,
+    Tooltip = 'Enable or Disable the hotkey for Camlock',
+    Callback = function(Value)
+        Script.Table.CamLock.HotkeyEnabled = Value
+        if not Value then
+            Script.Table.CamLock.Status = false
+            Script.Target = nil
+        end
     end
+})
+
+AimlockSection:AddLabel('Keybind'):AddKeyPicker('CamlockKeyPicker', {
+    Default = Script.Table.CamLock.Keybind,
+    SyncToggleState = false,
+    Mode = 'Toggle',
+    Text = 'Camlock Keybind',
+    NoUI = false,
+    ChangedCallback = function(New)
+        Script.Table.CamLock.Keybind = New.Name
+    end
+})
+
+AimlockSection:AddSlider('CamlockSmoothness', {
+    Text = 'Smoothness',
+    Default = Script.Table.CamLock.Smoothness,
+    Min = 0.01,
+    Max = 1,
+    Rounding = 2,
+    Callback = function(Value)
+        Script.Table.CamLock.Smoothness = Value
+    end
+})
+
+AimlockSection:AddSlider('CamlockPrediction', {
+    Text = 'Prediction',
+    Default = Script.Table.CamLock.Prediction,
+    Min = 0,
+    Max = 0.5,
+    Rounding = 3,
+    Callback = function(Value)
+        Script.Table.CamLock.Prediction = Value
+    end
+})
+
+-- Cleanup function
+getgenv().disableCamlock = function()
+    if Script.Connections.CamLock then
+        Script.Connections.CamLock:Disconnect()
+    end
+    Script.Target = nil
+    Script.Table.CamLock.Status = false
 end
-
-print("Streamable Hitbox Expander loaded! Only you see the expanded hitboxes.")
-
-    end)
 
 local PlayerSection = Tabs.Player:AddLeftGroupbox('Player')
 
